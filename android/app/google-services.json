@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "856981693621",
+    "project_id": "suheda-ab999",
+    "storage_bucket": "suheda-ab999.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:856981693621:android:d62f1a97c8751d254b8afc",
+        "android_client_info": {
+          "package_name": "com.example.tutordesk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBv5y8ynqiWCwFnPfEqmwX1_C3WJmLq2P8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
