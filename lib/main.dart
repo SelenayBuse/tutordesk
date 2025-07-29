@@ -6,6 +6,26 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:developer';
+import 'dart:io';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+
+
+Future<void> requestExactAlarmPermission() async {
+  if (Platform.isAndroid) {
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+    if (sdkInt >= 31) {
+      final intent = AndroidIntent(
+        action: 'android.settings.REQUEST_SCHEDULE_EXACT_ALARM',
+        flags: <int>[Flag.FLAG_ACTIVITY_NEW_TASK],
+      );
+      await intent.launch();
+    }
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +35,7 @@ void main() async {
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
   }
-
+    await requestExactAlarmPermission(); 
   runApp(const MyApp());
 }
 
@@ -31,17 +51,27 @@ class NotificationService {
     await _notifications.initialize(settings);
   }
 
-  Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
+Future<void> scheduleNotification({
+  required int id,
+  required String title,
+  required String body,
+  required DateTime scheduledDate,
+}) async {
+  try {
+    final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
+
+    if (tzDate.isBefore(tz.TZDateTime.now(tz.local))) {
+      debugPrint("🛑 Notification not scheduled — date is in the past: $tzDate");
+      return;
+    }
+
+    debugPrint("⏰ Scheduling notification for: $tzDate");
+
     await _notifications.zonedSchedule(
       id,
       title,
       body,
-      tz.TZDateTime.from(scheduledDate, tz.local),
+      tzDate,
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'lesson_channel',
@@ -50,10 +80,13 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
+      //androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
-  }
+  } catch (e, st) {
+    debugPrint("❌ Failed to schedule notification: $e\n$st");
+  }  } 
 }
 
 class MyApp extends StatelessWidget {
@@ -497,7 +530,14 @@ class WeeklyProgramPage extends StatelessWidget {
                             'stuName': result['stuName'],
                             'fee': fee,
                             'lessonDate': Timestamp.fromDate(lessonDate),
-                            'isPaid': false, // otomatik olarak ödeme yapılmamış olarak başlat
+                            'isPaid': false,
+                          }).then((_) async {
+                            await NotificationService().scheduleNotification(
+                              id: lessonDate.millisecondsSinceEpoch ~/ 1000,
+                              title: 'Ders Hatırlatması',
+                              body: '${result['stuName']} ile dersiniz başlamak üzere.',
+                              scheduledDate: lessonDate.subtract(const Duration(minutes: 10)),
+                            );
                           });
                         }
                       },
