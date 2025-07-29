@@ -46,47 +46,114 @@ class NotificationService {
     tz.initializeTimeZones();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const initializationSettings = InitializationSettings(android: android);
 
-    const settings = InitializationSettings(android: android);
-    await _notifications.initialize(settings);
+    await _notifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (response) async {
+        final payload = response.payload ?? '';
+        final parts = payload.split('|');
+        if (parts.length == 2) {
+          final docId = parts[0];
+          final stuName = parts[1];
+          final action = response.actionId;
+
+          final lessonDoc = FirebaseFirestore.instance.collection('lessons').doc(docId);
+          final studentQuery = await FirebaseFirestore.instance
+              .collection('students')
+              .where('stuName', isEqualTo: stuName)
+              .limit(1)
+              .get();
+
+          if (studentQuery.docs.isNotEmpty) {
+            final studentDoc = studentQuery.docs.first;
+            final studentId = studentDoc.id;
+            final fee = studentDoc['fee'] ?? 0;
+
+            if (action == 'evet') {
+              await lessonDoc.update({'isPaid': true});
+              await FirebaseFirestore.instance.collection('students').doc(studentId).update({
+                'paidAmount': FieldValue.increment(fee),
+              });
+            } else if (action == 'hayir') {
+              await lessonDoc.update({'isPaid': false});
+              await FirebaseFirestore.instance.collection('students').doc(studentId).update({
+                'unpaidAmount': FieldValue.increment(fee),
+              });
+            }
+          }
+        }
+      },
+    );
   }
 
-Future<void> scheduleNotification({
-  required int id,
-  required String title,
-  required String body,
-  required DateTime scheduledDate,
-}) async {
-  try {
-    final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+  }) async {
+    try {
+      final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
 
-    if (tzDate.isBefore(tz.TZDateTime.now(tz.local))) {
-      debugPrint("🛑 Notification not scheduled — date is in the past: $tzDate");
-      return;
-    }
+      if (tzDate.isBefore(tz.TZDateTime.now(tz.local))) {
+        debugPrint("🛑 Notification not scheduled — date is in the past: $tzDate");
+        return;
+      }
 
-    debugPrint("⏰ Scheduling notification for: $tzDate");
+      debugPrint("⏰ Scheduling notification for: $tzDate");
+
+      await _notifications.zonedSchedule(
+        id,
+        title,
+        body,
+        tzDate,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'lesson_channel',
+            'Lesson Reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+          ),
+        ),
+        //androidAllowWhileIdle: true,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e, st) {
+      debugPrint("❌ Failed to schedule notification: $e\n$st");
+    }  } 
+
+  Future<void> scheduleFollowUpNotification({
+    required int id,
+    required String docId,
+    required String stuName,
+    required DateTime scheduledDate,
+  }) async {
+    final tzDate = tz.TZDateTime.from(scheduledDate.add(const Duration(hours: 1)), tz.local);
+    if (tzDate.isBefore(tz.TZDateTime.now(tz.local))) return;
 
     await _notifications.zonedSchedule(
       id,
-      title,
-      body,
+      'Ödeme Kontrolü',
+      '$stuName ile dersinizin ödemesini aldınız mı?',
       tzDate,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'lesson_channel',
-          'Lesson Reminders',
+          'payment_check_channel',
+          'Payment Check',
           importance: Importance.max,
           priority: Priority.high,
+          actions: <AndroidNotificationAction>[
+            AndroidNotificationAction('evet', 'Evet'),
+            AndroidNotificationAction('hayir', 'Hayır'),
+          ],
         ),
       ),
-      //androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: '$docId|$stuName',
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
-  } catch (e, st) {
-    debugPrint("❌ Failed to schedule notification: $e\n$st");
-  }  } 
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -328,7 +395,7 @@ class WeeklyProgramPage extends StatelessWidget {
     final end = start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
     return [
       DateTime(start.year, start.month, start.day),
-      DateTime(end.year, end.month, end.day, 23, 59, 59, 999)
+      DateTime(end.year, end.month, end.day, 23, 59, 59, 999),
     ];
   }
 
@@ -387,49 +454,82 @@ class WeeklyProgramPage extends StatelessWidget {
                     ),
                   ),
                   children: [
-                  ...dayLessons.map((doc) {
-                    final lesson = doc.data() as Map<String, dynamic>;
-                    final dateTime = (lesson['lessonDate'] as Timestamp).toDate();
-                    final timeStr = DateFormat('HH:mm').format(dateTime);
-                    final fee = lesson['fee'] != null ? " | Ücret: ${lesson['fee']}₺" : "";
-                    final isPast = dateTime.isBefore(now);
-                    final isPaid = lesson['isPaid'] ?? false;
-                    final statusText = isPast ? (isPaid ? " (Ödendi)" : " (Ödenmedi)") : "";
+                    ...dayLessons.map((doc) {
+                      final lesson = doc.data() as Map<String, dynamic>;
+                      final dateTime = (lesson['lessonDate'] as Timestamp).toDate();
+                      final timeStr = DateFormat('HH:mm').format(dateTime);
+                      final fee = lesson['fee'] != null ? " | Ücret: ${lesson['fee']}₺" : "";
+                      final isPast = dateTime.isBefore(now);
+                      final isPaid = lesson['isPaid'] ?? false;
+                      final statusText = isPast ? (isPaid ? " (Ödendi)" : " (Ödenmedi)") : "";
 
-                    return Opacity(
-                      opacity: isPast ? 0.4 : 1.0,
-                      child: ListTile(
-                        title: Text(lesson['stuName']),
-                        subtitle: Text('Saat: $timeStr$fee$statusText'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.cancel, color: Colors.red),
-                          tooltip: "İptal Et",
-                          onPressed: () async {
-                            final result = await showDialog<bool>(
+                      return Opacity(
+                        opacity: isPast ? 0.4 : 1.0,
+                        child: ListTile(
+                          title: Text(lesson['stuName']),
+                          subtitle: Text('Saat: $timeStr$fee$statusText'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.cancel, color: Colors.red),
+                            tooltip: "İptal Et",
+                            onPressed: () async {
+                            final isRecurrent = lesson['isRecurrent'] == true;
+                            final result = await showDialog<String>(
                               context: context,
                               builder: (context) => AlertDialog(
-                                title: const Text("Dersi İptal Et"),
-                                content: const Text("Bu dersi silmek istiyor musun?"),
+                                title: const Text("Dersi Sil"),
+                                content: isRecurrent
+                                    ? const Text("Bu ders tekrarlayan bir derstir.\n\nSadece bu dersi mi silmek istiyorsunuz yoksa bu ve gelecek tüm tekrarları mı?")
+                                    : const Text("Bu dersi silmek istediğinize emin misiniz?"),
                                 actions: [
+                                  if (isRecurrent)
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, 'single'),
+                                      child: const Text("Sadece Bu Ders"),
+                                    ),
+                                  if (isRecurrent)
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, 'future'),
+                                      child: const Text("Bu ve Gelecek Tüm Dersler"),
+                                    ),
+                                  if (!isRecurrent)
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(context, 'single'),
+                                      child: const Text("Sil"),
+                                    ),
                                   TextButton(
+                                    onPressed: () => Navigator.pop(context, null),
                                     child: const Text("Vazgeç"),
-                                    onPressed: () => Navigator.pop(context, false),
-                                  ),
-                                  ElevatedButton(
-                                    child: const Text("Sil"),
-                                    onPressed: () => Navigator.pop(context, true),
                                   ),
                                 ],
                               ),
                             );
-                            if (result == true) {
+
+                            if (result == 'single') {
                               await FirebaseFirestore.instance.collection('lessons').doc(doc.id).delete();
+                              } else if (result == 'future') {
+
+                                final lessonDate = (lesson['lessonDate'] as Timestamp).toDate();
+                                final stuName = lesson['stuName'];
+
+                                final futureLessons = await FirebaseFirestore.instance
+                                    .collection('lessons')
+                                    .where('stuName', isEqualTo: stuName)
+                                    .where('isRecurrent', isEqualTo: true)
+                                    .get();
+
+                                for (final lessonDoc in futureLessons.docs) {
+                                  final thisLessonDate = (lessonDoc['lessonDate'] as Timestamp).toDate();
+                                  if (!thisLessonDate.isBefore(lessonDate)) {
+                                    await lessonDoc.reference.delete();
+                                  }
+                                }
+                              }
                             }
-                          },
+                          ),
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }),
+                    const Divider(),
                     ListTile(
                       leading: const Icon(Icons.add),
                       title: const Text("Ders Ekle"),
@@ -445,6 +545,7 @@ class WeeklyProgramPage extends StatelessWidget {
 
                         String? selectedStudent;
                         TimeOfDay selectedTime = TimeOfDay.now();
+                        bool isRecurrent = false;
 
                         final result = await showDialog<Map<String, dynamic>>(
                           context: context,
@@ -489,23 +590,35 @@ class WeeklyProgramPage extends StatelessWidget {
                                         ),
                                       ],
                                     ),
+                                    Row(
+                                      children: [
+                                        Checkbox(
+                                          value: isRecurrent,
+                                          onChanged: (value) {
+                                            setState(() => isRecurrent = value ?? false);
+                                          },
+                                        ),
+                                        const Text("Tekrarlayan Ders (1 Yıl)"),
+                                      ],
+                                    ),
                                   ],
                                 ),
                                 actions: [
                                   TextButton(
-                                    child: const Text("Vazgeç"),
                                     onPressed: () => Navigator.pop(context),
+                                    child: const Text("Vazgeç"),
                                   ),
                                   ElevatedButton(
-                                    child: const Text("Ekle"),
                                     onPressed: () {
                                       if (selectedStudent != null) {
                                         Navigator.pop(context, {
                                           "stuName": selectedStudent,
                                           "time": selectedTime,
+                                          "isRecurrent": isRecurrent,
                                         });
                                       }
                                     },
+                                    child: const Text("Ekle"),
                                   ),
                                 ],
                               ),
@@ -516,9 +629,9 @@ class WeeklyProgramPage extends StatelessWidget {
                         if (result != null) {
                           final selectedStu = students.firstWhere((s) => s['stuName'] == result['stuName']);
                           final fee = selectedStu['fee'];
-
                           final d = bounds[0].add(Duration(days: day - 1));
-                          final lessonDate = DateTime(
+
+                          final baseDate = DateTime(
                             d.year,
                             d.month,
                             d.day,
@@ -526,19 +639,56 @@ class WeeklyProgramPage extends StatelessWidget {
                             result['time'].minute,
                           );
 
-                          await FirebaseFirestore.instance.collection('lessons').add({
-                            'stuName': result['stuName'],
-                            'fee': fee,
-                            'lessonDate': Timestamp.fromDate(lessonDate),
-                            'isPaid': false,
-                          }).then((_) async {
+                          final isRecurrent = result['isRecurrent'] ?? false;
+
+                          if (isRecurrent) {
+                            for (int i = 0; i < 52; i++) {
+                              final recurringDate = baseDate.add(Duration(days: i * 7));
+                              final docRef = await FirebaseFirestore.instance.collection('lessons').add({
+                                'stuName': result['stuName'],
+                                'fee': fee,
+                                'lessonDate': Timestamp.fromDate(recurringDate),
+                                'isPaid': false,
+                                'isRecurrent': true,
+                              });
+
+                              final id = recurringDate.millisecondsSinceEpoch ~/ 1000;
+                              await NotificationService().scheduleNotification(
+                                id: id,
+                                title: 'Ders Hatırlatması',
+                                body: '${result['stuName']} ile dersiniz başlamak üzere.',
+                                scheduledDate: recurringDate.subtract(const Duration(minutes: 10)),
+                              );
+                              await NotificationService().scheduleFollowUpNotification(
+                                id: id + 1,
+                                docId: docRef.id,
+                                stuName: result['stuName'],
+                                scheduledDate: recurringDate,
+                              );
+                            }
+                          } else {
+                            final docRef = await FirebaseFirestore.instance.collection('lessons').add({
+                              'stuName': result['stuName'],
+                              'fee': fee,
+                              'lessonDate': Timestamp.fromDate(baseDate),
+                              'isPaid': false,
+                              'isRecurrent': false,
+                            });
+
+                            final id = baseDate.millisecondsSinceEpoch ~/ 1000;
                             await NotificationService().scheduleNotification(
-                              id: lessonDate.millisecondsSinceEpoch ~/ 1000,
+                              id: id,
                               title: 'Ders Hatırlatması',
                               body: '${result['stuName']} ile dersiniz başlamak üzere.',
-                              scheduledDate: lessonDate.subtract(const Duration(minutes: 10)),
+                              scheduledDate: baseDate.subtract(const Duration(minutes: 10)),
                             );
-                          });
+                            await NotificationService().scheduleFollowUpNotification(
+                              id: id + 1,
+                              docId: docRef.id,
+                              stuName: result['stuName'],
+                              scheduledDate: baseDate,
+                            );
+                          }
                         }
                       },
                     )

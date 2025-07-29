@@ -43,3 +43,55 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+build/
+flutter_*.png
+*.lock
+*.log
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/app/debug
+android/app/profile
+android/app/release
+*.iml
+
+# iOS
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/.symlinks/
+ios/Pods/
+ios/.flutter-plugins
+ios/.flutter-plugins-dependencies
+ios/Runner.xcworkspace/
+ios/DerivedData/
+ios/.dart_tool/
+
+# Firebase
+firebase-debug.log
+.firebase/
+.firebaserc
+
+# VS Code / IntelliJ / Xcode
+.vscode/
+.idea/
+*.swp
+*.sublime-workspace
+*.xcuserstate
+
+# macOS/Linux artifacts
+.DS_Store
+*.tmp
+*.bak
+
+# Environment config (manually maintained)
+.env
+.env.local
+.env.production
+.env.development
