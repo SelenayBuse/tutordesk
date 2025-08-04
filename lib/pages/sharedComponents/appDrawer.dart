@@ -14,64 +14,113 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      width: 240,
+      width: 260,
       backgroundColor: const Color(0xFFF9F5FF),
       child: Column(
         children: [
           Container(
-            height: 120,
+            height: 140,
+            width: double.infinity,
             padding: const EdgeInsets.only(left: 16, bottom: 12),
             alignment: Alignment.bottomLeft,
-            color: const Color.fromARGB(255, 211, 192, 242),
+            decoration: const BoxDecoration(
+              color: Color.fromARGB(255, 211, 192, 242),
+              borderRadius: BorderRadius.only(
+                bottomRight: Radius.circular(32),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                )
+              ],
+            ),
             child: const Text(
               'Menü',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.deepPurple),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: Colors.deepPurple,
+              ),
             ),
           ),
+          const SizedBox(height: 8),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _drawerItem(Icons.calendar_today, 'Ana Sayfa', () {
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TeacherHomePage()));
-                }),
-                _drawerItem(Icons.calendar_view_week, 'Haftalık Program', () {
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WeeklyProgramPage()));
-                }),
+                _drawerItem(
+                  icon: Icons.calendar_today,
+                  label: 'Ana Sayfa',
+                  onTap: () {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TeacherHomePage()));
+                  },
+                ),
+                _drawerItem(
+                  icon: Icons.calendar_view_week,
+                  label: 'Haftalık Program',
+                  onTap: () {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WeeklyProgramPage()));
+                  },
+                ),
                 if (role != 'student')
-                  _drawerItem(Icons.person, 'Öğrencilerim', () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyStudentsPage()));
-                  }),
+                  _drawerItem(
+                    icon: Icons.person,
+                    label: 'Öğrencilerim',
+                    onTap: () {
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyStudentsPage()));
+                    },
+                  ),
                 if (role != 'student')
-                  _drawerItem(Icons.payment, 'Ödemelerim', () {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyPaymentsPage()));
-                  }),
+                  _drawerItem(
+                    icon: Icons.payment,
+                    label: 'Ödemelerim',
+                    onTap: () {
+                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyPaymentsPage()));
+                    },
+                  ),
               ],
             ),
           ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.deepPurple),
-            title: const Text('Çıkış Yap', style: TextStyle(fontSize: 16, color: Colors.black87)),
-            onTap: () async {
-              await FirebaseAuth.instance.signOut();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false,
-              );
-            },
+          const Divider(thickness: 1, indent: 16, endIndent: 16),
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0, bottom: 12),
+            child: ListTile(
+              leading: const Icon(Icons.logout, color: Colors.deepPurple),
+              title: const Text(
+                'Çıkış Yap',
+                style: TextStyle(fontSize: 16, color: Colors.black87),
+              ),
+              onTap: () async {
+                await FirebaseAuth.instance.signOut();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _drawerItem(IconData icon, String title, VoidCallback onTap) {
+  Widget _drawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.deepPurple),
-      title: Text(title, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 16, color: Colors.black87),
+      ),
       onTap: onTap,
+      hoverColor: const Color(0xFFEDE7F6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 }

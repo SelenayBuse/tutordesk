@@ -22,6 +22,8 @@ class _SignUpPageState extends State<SignUpPage> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _isLoading = false;
 
   String _mapRoleToKey(String role) {
     switch (role) {
@@ -54,16 +56,19 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _signUp() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+
       try {
         final fullName = _nameController.text.trim();
         final nameParts = fullName.split(' ');
 
         if (nameParts.length < 2) {
           _showSnack('Lütfen ad ve soyad giriniz.');
+          setState(() => _isLoading = false);
           return;
         }
 
-        final firstName = _normalizeTurkish(nameParts.sublist(0, nameParts.length - 1).join('')).toLowerCase();
+        final firstName = _normalizeTurkish(nameParts.first).toLowerCase();
         final lastName = _normalizeTurkish(nameParts.last).toLowerCase();
         final generatedUsername = '$lastName.$firstName';
 
@@ -79,12 +84,14 @@ class _SignUpPageState extends State<SignUpPage> {
         await userCredential.user!.sendEmailVerification();
         _showVerifyDialog(userCredential.user!, generatedUsername, fullName, phone);
       } on FirebaseAuthException catch (e) {
+        setState(() => _isLoading = false);
         if (e.code == 'email-already-in-use') {
           _showSnack('Bu e-posta adresi zaten kullanılıyor.');
         } else {
           _showSnack('Hata: ${e.message}');
         }
       } catch (e) {
+        setState(() => _isLoading = false);
         _showSnack('Hata: ${e.toString()}');
       }
     }
@@ -101,7 +108,7 @@ class _SignUpPageState extends State<SignUpPage> {
       builder: (_) => AlertDialog(
         title: const Text('E-posta Doğrulama'),
         content: const Text(
-          'Lütfen e-posta adresinize gelen doğrulama bağlantısına tıklayın. Ardından "Doğruladım" butonuna basın.'),
+            'Lütfen e-posta adresinize gelen doğrulama bağlantısına tıklayın. Ardından "Doğruladım" butonuna basın.'),
         actions: [
           TextButton(
             onPressed: () async {
@@ -120,7 +127,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 }
 
                 if (mounted) {
-                  Navigator.of(context).pop(); // dialog kapanır
+                  Navigator.of(context).pop();
                   Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => nextPage));
                 }
               } else {
@@ -154,9 +161,22 @@ class _SignUpPageState extends State<SignUpPage> {
       child: ElevatedButton(
         onPressed: () => setState(() => _selectedRole = roleLabel),
         style: ElevatedButton.styleFrom(
-          backgroundColor: _selectedRole == roleLabel ? const Color.fromARGB(255, 191, 169, 229) : Colors.grey,
+          backgroundColor: _selectedRole == roleLabel
+              ? const Color.fromARGB(255, 191, 169, 229)
+              : Colors.grey[400],
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
-        child: Text(roleLabel),
+        child: Text(
+          roleLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13),
+        ),
       ),
     );
   }
@@ -164,58 +184,98 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text("Kayıt Ol")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text('... olarak kayıt olmak istiyorum.', style: TextStyle(fontSize: 18)),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  _buildRoleButton('Öğrenci'),
-                  const SizedBox(width: 8),
-                  _buildRoleButton('Öğretmen'),
-                  const SizedBox(width: 8),
-                  _buildRoleButton('Öğrenci Koçu'),
-                ],
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Card(
+            elevation: 4,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '... olarak kayıt olmak istiyorum.',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildRoleButton('Öğrenci'),
+                        const SizedBox(width: 8),
+                        _buildRoleButton('Öğretmen'),
+                        const SizedBox(width: 8),
+                        _buildRoleButton('Öğrenci Koçu'),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        prefixIcon: Icon(Icons.email),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) =>
+                          value != null && value.contains('@') ? null : 'Geçerli bir email giriniz',
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Ad Soyad',
+                        prefixIcon: Icon(Icons.person),
+                      ),
+                      validator: (value) =>
+                          value != null && value.isNotEmpty ? null : 'Ad soyad gerekli',
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Telefon (+90...)',
+                        prefixIcon: Icon(Icons.phone),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) =>
+                          value != null && value.length >= 10 ? null : 'Telefon numarası geçersiz',
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Şifre',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                      ),
+                      validator: (value) =>
+                          value != null && value.length >= 6 ? null : 'Şifre en az 6 karakter olmalı',
+                    ),
+                    const SizedBox(height: 24),
+                    _isLoading
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton.icon(
+                            onPressed: _signUp,
+                            icon: const Icon(Icons.person_add),
+                            label: const Text('Kayıt Ol'),
+                          ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    value != null && value.contains('@') ? null : 'Geçerli bir email giriniz',
-              ),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Ad Soyad'),
-                validator: (value) =>
-                    value != null && value.isNotEmpty ? null : 'Ad soyad gerekli',
-              ),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Telefon (+90...)'),
-                keyboardType: TextInputType.phone,
-                validator: (value) =>
-                    value != null && value.length >= 10 ? null : 'Telefon numarası geçersiz',
-              ),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Şifre'),
-                obscureText: true,
-                validator: (value) =>
-                    value != null && value.length >= 6 ? null : 'Şifre en az 6 karakter olmalı',
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _signUp,
-                child: const Text('Kayıt Ol'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

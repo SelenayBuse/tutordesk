@@ -33,7 +33,13 @@ class WeeklyProgramPage extends StatelessWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Haftalık Program')),
+      appBar: AppBar(
+        centerTitle: true,
+        title: const Text(
+          'Haftalık Program',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
       drawer: const AppDrawer(role: 'teacher'),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -62,13 +68,18 @@ class WeeklyProgramPage extends StatelessWidget {
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
                 child: ExpansionTile(
                   initiallyExpanded: day == today,
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                  childrenPadding: const EdgeInsets.only(bottom: 8),
                   title: Text(
                     dayNames[day]!,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: day == today ? Colors.deepPurple : null,
+                      fontSize: 16,
+                      color: day == today ? Colors.deepPurple : Colors.black87,
                     ),
                   ),
                   children: [
@@ -81,51 +92,57 @@ class WeeklyProgramPage extends StatelessWidget {
                       final isPaid = lesson['isPaid'] ?? false;
                       final statusText = isPast ? (isPaid ? " (Ödendi)" : " (Ödenmedi)") : "";
 
-                      return Opacity(
-                        opacity: isPast ? 0.4 : 1.0,
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        color: isPast ? Colors.grey[200] : Colors.white,
                         child: ListTile(
-                          title: Text(lesson['stuName']),
+                          leading: const Icon(Icons.school, color: Colors.deepPurple),
+                          title: Text(
+                            lesson['stuName'],
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           subtitle: Text('Saat: $timeStr$fee$statusText'),
                           trailing: IconButton(
                             icon: const Icon(Icons.cancel, color: Colors.red),
                             tooltip: "İptal Et",
                             onPressed: () async {
-                            final isRecurrent = lesson['isRecurrent'] == true;
-                            final result = await showDialog<String>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text("Dersi Sil"),
-                                content: isRecurrent
-                                    ? const Text("Bu ders tekrarlayan bir derstir.\n\nSadece bu dersi mi silmek istiyorsunuz yoksa bu ve gelecek tüm tekrarları mı?")
-                                    : const Text("Bu dersi silmek istediğinize emin misiniz?"),
-                                actions: [
-                                  if (isRecurrent)
+                              final isRecurrent = lesson['isRecurrent'] == true;
+                              final result = await showDialog<String>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  title: const Text("Dersi Sil"),
+                                  content: isRecurrent
+                                      ? const Text("Bu ders tekrarlayan bir derstir.\n\nSadece bu dersi mi silmek istiyorsunuz yoksa bu ve gelecek tüm tekrarları mı?")
+                                      : const Text("Bu dersi silmek istediğinize emin misiniz?"),
+                                  actions: [
+                                    if (isRecurrent)
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, 'single'),
+                                        child: const Text("Sadece Bu Ders"),
+                                      ),
+                                    if (isRecurrent)
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, 'future'),
+                                        child: const Text("Bu ve Gelecek Tüm Dersler"),
+                                      ),
+                                    if (!isRecurrent)
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, 'single'),
+                                        child: const Text("Sil"),
+                                      ),
                                     TextButton(
-                                      onPressed: () => Navigator.pop(context, 'single'),
-                                      child: const Text("Sadece Bu Ders"),
+                                      onPressed: () => Navigator.pop(context, null),
+                                      child: const Text("Vazgeç"),
                                     ),
-                                  if (isRecurrent)
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.pop(context, 'future'),
-                                      child: const Text("Bu ve Gelecek Tüm Dersler"),
-                                    ),
-                                  if (!isRecurrent)
-                                    ElevatedButton(
-                                      onPressed: () => Navigator.pop(context, 'single'),
-                                      child: const Text("Sil"),
-                                    ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context, null),
-                                    child: const Text("Vazgeç"),
-                                  ),
-                                ],
-                              ),
-                            );
+                                  ],
+                                ),
+                              );
 
-                            if (result == 'single') {
-                              await FirebaseFirestore.instance.collection('lessons').doc(doc.id).delete();
+                              if (result == 'single') {
+                                await FirebaseFirestore.instance.collection('lessons').doc(doc.id).delete();
                               } else if (result == 'future') {
-
                                 final lessonDate = (lesson['lessonDate'] as Timestamp).toDate();
                                 final stuName = lesson['stuName'];
 
@@ -142,174 +159,186 @@ class WeeklyProgramPage extends StatelessWidget {
                                   }
                                 }
                               }
-                            }
+                            },
                           ),
                         ),
                       );
                     }),
-                    const Divider(),
-                    ListTile(
-                      leading: const Icon(Icons.add),
-                      title: const Text("Ders Ekle"),
-                      onTap: () async {
-                        final studentsSnapshot = await FirebaseFirestore.instance
-                            .collection('students')
-                            .orderBy('stuName')
-                            .get();
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text("Ders Ekle"),
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        onPressed: () async {
+                          final studentsSnapshot = await FirebaseFirestore.instance
+                              .collection('students')
+                              .orderBy('stuName')
+                              .get();
 
-                        final students = studentsSnapshot.docs
-                            .map((doc) => doc.data() as Map<String, dynamic>)
-                            .toList();
+                          final students = studentsSnapshot.docs
+                              .map((doc) => doc.data() as Map<String, dynamic>)
+                              .toList();
 
-                        String? selectedStudent;
-                        TimeOfDay selectedTime = TimeOfDay.now();
-                        bool isRecurrent = false;
+                          String? selectedStudent;
+                          TimeOfDay selectedTime = TimeOfDay.now();
+                          bool isRecurrent = false;
 
-                        final result = await showDialog<Map<String, dynamic>>(
-                          context: context,
-                          builder: (context) {
-                            return StatefulBuilder(
-                              builder: (context, setState) => AlertDialog(
-                                title: const Text("Ders Ekle"),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    DropdownButtonFormField<String>(
-                                      decoration: const InputDecoration(labelText: "Öğrenci Seç"),
-                                      value: selectedStudent,
-                                      isExpanded: true,
-                                      items: students
-                                          .map((stu) => DropdownMenuItem<String>(
-                                                value: stu['stuName'],
-                                                child: Text(stu['stuName']),
-                                              ))
-                                          .toList(),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          selectedStudent = value;
-                                        });
+                          final result = await showDialog<Map<String, dynamic>>(
+                            context: context,
+                            builder: (context) {
+                              return StatefulBuilder(
+                                builder: (context, setState) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  title: const Text("Ders Ekle"),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      DropdownButtonFormField<String>(
+                                        decoration: const InputDecoration(labelText: "Öğrenci Seç"),
+                                        value: selectedStudent,
+                                        isExpanded: true,
+                                        items: students
+                                            .map((stu) => DropdownMenuItem<String>(
+                                                  value: stu['stuName'],
+                                                  child: Text(stu['stuName']),
+                                                ))
+                                            .toList(),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            selectedStudent = value;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const Text("Saat: "),
+                                          TextButton(
+                                            child: Text("${selectedTime.format(context)}"),
+                                            onPressed: () async {
+                                              final picked = await showTimePicker(
+                                                context: context,
+                                                initialTime: selectedTime,
+                                              );
+                                              if (picked != null) {
+                                                setState(() => selectedTime = picked);
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Checkbox(
+                                            value: isRecurrent,
+                                            onChanged: (value) {
+                                              setState(() => isRecurrent = value ?? false);
+                                            },
+                                          ),
+                                          const Flexible(
+                                            child: Text("Tekrarlayan Ders (1 Yıl)", overflow: TextOverflow.ellipsis),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text("Vazgeç"),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        if (selectedStudent != null) {
+                                          Navigator.pop(context, {
+                                            "stuName": selectedStudent,
+                                            "time": selectedTime,
+                                            "isRecurrent": isRecurrent,
+                                          });
+                                        }
                                       },
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        const Text("Saat: "),
-                                        TextButton(
-                                          child: Text("${selectedTime.format(context)}"),
-                                          onPressed: () async {
-                                            final picked = await showTimePicker(
-                                              context: context,
-                                              initialTime: selectedTime,
-                                            );
-                                            if (picked != null) {
-                                              setState(() => selectedTime = picked);
-                                            }
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Checkbox(
-                                          value: isRecurrent,
-                                          onChanged: (value) {
-                                            setState(() => isRecurrent = value ?? false);
-                                          },
-                                        ),
-                                        const Text("Tekrarlayan Ders (1 Yıl)"),
-                                      ],
+                                      child: const Text("Ekle"),
                                     ),
                                   ],
                                 ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text("Vazgeç"),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      if (selectedStudent != null) {
-                                        Navigator.pop(context, {
-                                          "stuName": selectedStudent,
-                                          "time": selectedTime,
-                                          "isRecurrent": isRecurrent,
-                                        });
-                                      }
-                                    },
-                                    child: const Text("Ekle"),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-
-                        if (result != null) {
-                          final selectedStu = students.firstWhere((s) => s['stuName'] == result['stuName']);
-                          final fee = selectedStu['fee'];
-                          final d = bounds[0].add(Duration(days: day - 1));
-
-                          final baseDate = DateTime(
-                            d.year,
-                            d.month,
-                            d.day,
-                            result['time'].hour,
-                            result['time'].minute,
+                              );
+                            },
                           );
 
-                          final isRecurrent = result['isRecurrent'] ?? false;
+                          if (result != null) {
+                            final selectedStu = students.firstWhere((s) => s['stuName'] == result['stuName']);
+                            final fee = selectedStu['fee'];
+                            final d = bounds[0].add(Duration(days: day - 1));
 
-                          if (isRecurrent) {
-                            for (int i = 0; i < 52; i++) {
-                              final recurringDate = baseDate.add(Duration(days: i * 7));
+                            final baseDate = DateTime(
+                              d.year,
+                              d.month,
+                              d.day,
+                              result['time'].hour,
+                              result['time'].minute,
+                            );
+
+                            final isRecurrent = result['isRecurrent'] ?? false;
+
+                            if (isRecurrent) {
+                              for (int i = 0; i < 52; i++) {
+                                final recurringDate = baseDate.add(Duration(days: i * 7));
+                                final docRef = await FirebaseFirestore.instance.collection('lessons').add({
+                                  'stuName': result['stuName'],
+                                  'fee': fee,
+                                  'lessonDate': Timestamp.fromDate(recurringDate),
+                                  'isPaid': false,
+                                  'isRecurrent': true,
+                                });
+
+                                final id = recurringDate.millisecondsSinceEpoch ~/ 1000;
+                                await NotificationService().scheduleNotification(
+                                  id: id,
+                                  title: 'Ders Hatırlatması',
+                                  body: '${result['stuName']} ile dersiniz başlamak üzere.',
+                                  scheduledDate: recurringDate.subtract(const Duration(minutes: 10)),
+                                );
+                                await NotificationService().scheduleFollowUpNotification(
+                                  id: id + 1,
+                                  docId: docRef.id,
+                                  stuName: result['stuName'],
+                                  scheduledDate: recurringDate,
+                                );
+                              }
+                            } else {
                               final docRef = await FirebaseFirestore.instance.collection('lessons').add({
                                 'stuName': result['stuName'],
                                 'fee': fee,
-                                'lessonDate': Timestamp.fromDate(recurringDate),
+                                'lessonDate': Timestamp.fromDate(baseDate),
                                 'isPaid': false,
-                                'isRecurrent': true,
+                                'isRecurrent': false,
                               });
 
-                              final id = recurringDate.millisecondsSinceEpoch ~/ 1000;
+                              final id = baseDate.millisecondsSinceEpoch ~/ 1000;
                               await NotificationService().scheduleNotification(
                                 id: id,
                                 title: 'Ders Hatırlatması',
                                 body: '${result['stuName']} ile dersiniz başlamak üzere.',
-                                scheduledDate: recurringDate.subtract(const Duration(minutes: 10)),
+                                scheduledDate: baseDate.subtract(const Duration(minutes: 10)),
                               );
                               await NotificationService().scheduleFollowUpNotification(
                                 id: id + 1,
                                 docId: docRef.id,
                                 stuName: result['stuName'],
-                                scheduledDate: recurringDate,
+                                scheduledDate: baseDate,
                               );
                             }
-                          } else {
-                            final docRef = await FirebaseFirestore.instance.collection('lessons').add({
-                              'stuName': result['stuName'],
-                              'fee': fee,
-                              'lessonDate': Timestamp.fromDate(baseDate),
-                              'isPaid': false,
-                              'isRecurrent': false,
-                            });
-
-                            final id = baseDate.millisecondsSinceEpoch ~/ 1000;
-                            await NotificationService().scheduleNotification(
-                              id: id,
-                              title: 'Ders Hatırlatması',
-                              body: '${result['stuName']} ile dersiniz başlamak üzere.',
-                              scheduledDate: baseDate.subtract(const Duration(minutes: 10)),
-                            );
-                            await NotificationService().scheduleFollowUpNotification(
-                              id: id + 1,
-                              docId: docRef.id,
-                              stuName: result['stuName'],
-                              scheduledDate: baseDate,
-                            );
                           }
-                        }
-                      },
-                    )
+                        },
+                      ),
+                    ),
                   ],
                 ),
               );
