@@ -38,6 +38,7 @@ dependencies:
   permission_handler: ^11.0.0
   android_intent_plus: ^4.0.1
   device_info_plus: ^10.1.0
+  firebase_auth: ^4.17.4
 
 
   # The following adds the Cupertino Icons font to your application.
