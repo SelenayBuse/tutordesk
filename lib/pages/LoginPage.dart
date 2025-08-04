@@ -7,7 +7,6 @@ import 'CoachHomePage.dart';
 import 'SignupPage.dart';
 import 'package:tutordesk/pages/AdminHomePage.dart';
 
-
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
   @override
@@ -47,10 +46,23 @@ class _LoginPageState extends State<LoginPage> {
       final email = userData['userMail'];
       final role = userData['role'];
 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      final user = userCredential.user;
+
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("E-posta doğrulaması gerekli. Doğrulama maili gönderildi."),
+          ),
+        );
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
 
       switch (role) {
         case 'teacher':

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../teacherHomePage.dart';
 import 'MyStudentsPage.dart';
 import 'MyPaymentsPage.dart';
 import 'WeeklyProgramPage.dart';
+import '../LoginPage.dart';
 
 class AppDrawer extends StatelessWidget {
-  final String role; // 'teacher', 'coach', vs.
+  final String role;
 
   const AppDrawer({super.key, required this.role});
 
@@ -14,8 +16,7 @@ class AppDrawer extends StatelessWidget {
     return Drawer(
       width: 240,
       backgroundColor: const Color(0xFFF9F5FF),
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
           Container(
             height: 120,
@@ -27,18 +28,40 @@ class AppDrawer extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.deepPurple),
             ),
           ),
-          _drawerItem(Icons.calendar_today, 'Ana Sayfa', () {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TeacherHomePage()));
-          }),
-          _drawerItem(Icons.calendar_view_week, 'Haftalık Program', () {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WeeklyProgramPage()));
-          }),
-          if (role != 'student') _drawerItem(Icons.person, 'Öğrencilerim', () {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyStudentsPage()));
-          }),
-          if (role != 'student') _drawerItem(Icons.payment, 'Ödemelerim', () {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyPaymentsPage()));
-          }),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _drawerItem(Icons.calendar_today, 'Ana Sayfa', () {
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TeacherHomePage()));
+                }),
+                _drawerItem(Icons.calendar_view_week, 'Haftalık Program', () {
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WeeklyProgramPage()));
+                }),
+                if (role != 'student')
+                  _drawerItem(Icons.person, 'Öğrencilerim', () {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyStudentsPage()));
+                  }),
+                if (role != 'student')
+                  _drawerItem(Icons.payment, 'Ödemelerim', () {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MyPaymentsPage()));
+                  }),
+              ],
+            ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.deepPurple),
+            title: const Text('Çıkış Yap', style: TextStyle(fontSize: 16, color: Colors.black87)),
+            onTap: () async {
+              await FirebaseAuth.instance.signOut();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                (route) => false,
+              );
+            },
+          ),
         ],
       ),
     );

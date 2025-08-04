@@ -11,6 +11,8 @@ import 'firebase_options.dart';
 import 'service/notification_service.dart';
 import 'pages/LoginPage.dart';
 import 'pages/TeacherHomePage.dart';
+import 'pages/StudentHomePage.dart';
+import 'pages/CoachHomePage.dart';
 
 Future<void> requestExactAlarmPermission() async {
   if (Platform.isAndroid) {
@@ -47,13 +49,25 @@ class MyApp extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const LoginPage();
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final role = doc.data()?['role'];
-    if (role == 'teacher') {
-      return const TeacherHomePage();
+    await user.reload();
+    final refreshedUser = FirebaseAuth.instance.currentUser;
+    if (refreshedUser != null && !refreshedUser.emailVerified) {
+      return const LoginPage();
     }
 
-    return const LoginPage(); // student/coach için ileride güncellenebilir
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = doc.data()?['role'];
+
+    switch (role) {
+      case 'teacher':
+        return const TeacherHomePage();
+      case 'student':
+        return const StudentHomePage();
+      case 'coach':
+        return const CoachHomePage();
+      default:
+        return const LoginPage();
+    }
   }
 
   @override
