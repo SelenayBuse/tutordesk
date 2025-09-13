@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appDrawer.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MyStudentsPage extends StatelessWidget {
   const MyStudentsPage({super.key});
@@ -129,6 +130,7 @@ class MyStudentsPage extends StatelessWidget {
               'fee': fee,
               'paidAmount': 0,
               'unpaidAmount': 0,
+              'uid': FirebaseAuth.instance.currentUser!.uid,
             });
           }
         },

@@ -338,6 +338,7 @@ class _WeeklyProgramPageState extends State<WeeklyProgramPage> {
                       "stuName": selectedStudent,
                       "time": selectedTime,
                       "isRecurrent": isRecurrent,
+                      "uid": FirebaseAuth.instance.currentUser!.uid,
                     });
                   }
                 },
