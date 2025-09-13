@@ -28,7 +28,7 @@ Future<void> requestExactAlarmPermission() async {
   }
 }
 
-void main() async {
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -39,26 +39,69 @@ void main() async {
     await Permission.notification.request();
   }
   await requestExactAlarmPermission();
+}
 
-  runApp(const MyApp());
+void main() async {
+  try {
+    await _bootstrap();
+    runApp(const MyApp());
+  } catch (e, st) {
+    // If boot fails before runApp, show a minimal error app
+    runApp(_BootErrorApp(error: e, stack: st));
+  }
+}
+
+class _BootErrorApp extends StatelessWidget {
+  final Object error;
+  final StackTrace stack;
+  const _BootErrorApp({required this.error, required this.stack, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Başlatma Hatası')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Text('Uygulama başlatılırken bir hata oluştu.\n\n$error\n\n$stack'),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   Future<Widget> _getStartPage() async {
+    // 1) Auth check
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const LoginPage();
 
-    await user.reload();
-    final refreshedUser = FirebaseAuth.instance.currentUser;
-    if (refreshedUser != null && !refreshedUser.emailVerified) {
+    // 2) Email verification (ignore errors from reload; don’t block start)
+    try {
+      await user.reload();
+    } catch (_) {}
+    final refreshed = FirebaseAuth.instance.currentUser;
+    if (refreshed != null && !refreshed.emailVerified) {
       return const LoginPage();
     }
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final role = doc.data()?['role'];
+    // 3) Fetch role from users/{uid}
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
+    if (!snap.exists) {
+      debugPrint('users/${user.uid} document does not exist.');
+      return const LoginPage();
+    }
+
+    final data = snap.data();
+    final role = data?['role'];
     switch (role) {
       case 'teacher':
         return const TeacherHomePage();
@@ -67,6 +110,7 @@ class MyApp extends StatelessWidget {
       case 'coach':
         return const CoachHomePage();
       default:
+        debugPrint('Unknown or missing role for ${user.uid}: $role');
         return const LoginPage();
     }
   }
@@ -75,6 +119,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Özel Ders Takip',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
@@ -111,14 +156,31 @@ class MyApp extends StatelessWidget {
       home: FutureBuilder<Widget>(
         future: _getStartPage(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
+          // Show progress while deciding the start page
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          return snapshot.data ?? const Scaffold(
-            body: Center(child: Text('Giriş sayfası yüklenemedi')),
-          );
+
+          // If anything threw inside _getStartPage, show the error clearly
+          if (snapshot.hasError) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Başlatma Hatası')),
+              body: Padding(
+                padding: const EdgeInsets.all(16),
+                child: SingleChildScrollView(
+                  child: Text(
+                    'Giriş sayfası yüklenemedi.\n\nHata: ${snapshot.error}\n\n${snapshot.stackTrace}',
+                  ),
+                ),
+              ),
+            );
+          }
+
+          // Never return null; fall back to LoginPage if something odd happened
+          final start = snapshot.data ?? const LoginPage();
+          return start;
         },
       ),
     );

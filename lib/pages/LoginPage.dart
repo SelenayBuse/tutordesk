@@ -19,11 +19,19 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  void _login() async {
+  @override
+  void dispose() {
+    usernameController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
     final username = usernameController.text.trim();
     final password = passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Kullanıcı adı ve şifre boş olamaz")),
       );
@@ -33,43 +41,53 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
+      // 1) Firestore: username -> email, role
       final userQuery = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('users') // Eğer usernames mapping'e geçersek burada değiştiririz
           .where('username', isEqualTo: username)
           .limit(1)
           .get();
 
       if (userQuery.docs.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Kullanıcı bulunamadı")),
         );
-        setState(() => _isLoading = false);
         return;
       }
 
       final userData = userQuery.docs.first.data();
-      final email = userData['userMail'];
-      final role = userData['role'];
+      final email = (userData['userMail'] ?? '').toString().trim();
+      final role = (userData['role'] ?? '').toString().trim();
 
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      if (email.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Kullanıcı e-postası bulunamadı")),
+        );
+        return;
+      }
 
-      final user = userCredential.user;
+      // 2) Auth: email + password
+      final cred = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
 
+      final user = cred.user;
+
+      // 3) E-posta doğrulaması zorunluysa
       if (user != null && !user.emailVerified) {
         await user.sendEmailVerification();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("E-posta doğrulaması gerekli. Doğrulama maili gönderildi."),
           ),
         );
         await FirebaseAuth.instance.signOut();
-        setState(() => _isLoading = false);
         return;
       }
 
+      // 4) Role yönlendirmesi
       Widget nextPage;
       switch (role) {
         case 'teacher':
@@ -85,20 +103,34 @@ class _LoginPageState extends State<LoginPage> {
           nextPage = const AdminHomePage();
           break;
         default:
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Tanımsız kullanıcı rolü")),
           );
-          setState(() => _isLoading = false);
           return;
       }
 
+      if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => nextPage));
+
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Giriş başarısız: ${e.message}")),
+        SnackBar(content: Text("Giriş başarısız (Auth): ${e.message ?? e.code}")),
+      );
+    } on FirebaseException catch (e) {
+      // Firestore hataları (permission-denied, not-found vs.)
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Veritabanı hatası: ${e.message ?? e.code}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Beklenmeyen bir hata oluştu")),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -137,14 +169,8 @@ class _LoginPageState extends State<LoginPage> {
                       labelText: 'Şifre',
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),
                   ),
